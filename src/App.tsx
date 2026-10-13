@@ -34,6 +34,7 @@ import {
   emptyData,
   tables,
   activeSprint,
+  sprintTiming,
   dateLabel,
   safeURL,
   today,
@@ -268,6 +269,10 @@ function Hub({ session }: { session: Session }) {
           (previous) =>
             previous ||
             activeSprint(next.sprints)?.id ||
+            [...next.sprints]
+              .filter((s) => s.start_date > today())
+              .sort((a, b) => a.start_date.localeCompare(b.start_date))[0]
+              ?.id ||
             [...next.sprints].sort((a, b) =>
               b.start_date.localeCompare(a.start_date),
             )[0]?.id ||
@@ -294,6 +299,10 @@ function Hub({ session }: { session: Session }) {
   );
   const admin = me?.role === "admin",
     current = activeSprint(data.sprints),
+    nextSprint = [...data.sprints]
+      .filter((s) => s.start_date > today())
+      .sort((a, b) => a.start_date.localeCompare(b.start_date))[0],
+    featuredSprint = current || nextSprint,
     sprint = data.sprints.find((s) => s.id === selectedSprint);
   const memberName = (id: unknown) =>
     data.team_members.find((m) => m.id === id)?.display_name || "Unassigned";
@@ -694,7 +703,7 @@ function Hub({ session }: { session: Session }) {
           .map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
-              {s.id === current?.id ? " · Current" : ""}
+              {` · ${sprintTiming(s).label}`}
             </option>
           ))}
       </select>
@@ -902,22 +911,44 @@ function Hub({ session }: { session: Session }) {
               <section className="sprint-banner">
                 <div>
                   <span className="eyebrow light">
-                    <span className="online-dot" /> CURRENT SPRINT
+                    <span className="online-dot" />{" "}
+                    {current
+                      ? "CURRENT SPRINT · IN PROGRESS"
+                      : nextSprint
+                        ? "NEXT SPRINT · UPCOMING"
+                        : "SPRINT PLANNING"}
                   </span>
-                  <h2>{current?.name || "Your next sprint starts here"}</h2>
+                  <h2>
+                    {featuredSprint?.name || "Your next sprint starts here"}
+                  </h2>
                   <p>
-                    {current?.goal ||
+                    {featuredSprint?.goal ||
                       "Create a two-week sprint and give the team a shared goal."}
                   </p>
                   <span className="banner-date">
-                    {current
-                      ? `${dateLabel(current.start_date)} — ${dateLabel(current.end_date)}`
+                    {featuredSprint
+                      ? `${dateLabel(featuredSprint.start_date)} — ${dateLabel(featuredSprint.end_date)}`
                       : "No sprint is active today"}
                   </span>
+                  {featuredSprint && (
+                    <div className="sprint-timing">
+                      <strong>{sprintTiming(featuredSprint).detail}</strong>
+                      <span>
+                        {current
+                          ? "Sprint is underway. Update your work as it progresses."
+                          : "This sprint has not started yet."}
+                      </span>
+                      <progress
+                        aria-label="Sprint time elapsed"
+                        max="100"
+                        value={sprintTiming(featuredSprint).progress}
+                      />
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {
-                    setSelectedSprint(current?.id || "");
+                    setSelectedSprint(featuredSprint?.id || "");
                     go("Sprint Priorities");
                   }}
                 >
@@ -1057,6 +1088,16 @@ function Hub({ session }: { session: Session }) {
                 </button>
                 <span className="muted">{filtered.length} items</span>
               </div>
+              {sprint && (
+                <div className="sprint-context">
+                  <Badge value={sprintTiming(sprint).label} />
+                  <strong>{sprintTiming(sprint).detail}</strong>
+                  <span>
+                    {dateLabel(sprint.start_date)} —{" "}
+                    {dateLabel(sprint.end_date)}
+                  </span>
+                </div>
+              )}
               <div className="board">
                 {statuses.map((s) => (
                   <section className="column" key={s}>
@@ -1106,7 +1147,15 @@ function Hub({ session }: { session: Session }) {
                       {dateLabel(sprint.end_date)}
                     </div>
                     <h2>{sprint.name}</h2>
+                    <div className="sprint-context">
+                      <Badge value={sprintTiming(sprint).label} />
+                      <strong>{sprintTiming(sprint).detail}</strong>
+                    </div>
                     <p>{sprint.goal}</p>
+                    <p className="muted">
+                      Sprints start automatically on their start date and end
+                      after their end date. Team dates use New York time.
+                    </p>
                   </section>
                   <section className="panel">
                     <PanelTitle

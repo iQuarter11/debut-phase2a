@@ -426,3 +426,44 @@ test("failed saves stay open with an actionable error", async ({ page }) => {
   );
   await expect(page.getByRole("dialog")).toBeVisible();
 });
+
+test("Sprint 1 starts automatically today and shows day one consistently", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.data.sprints[0].name = "Sprint 1";
+  state.data.sprints[0].start_date = localDate();
+  state.data.sprints[0].end_date = localDate(13);
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByText("Day 1 of 14", { exact: true })).toBeVisible();
+  await expect(page.getByText("CURRENT SPRINT · IN PROGRESS")).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Sprint Board" })
+    .click();
+  await expect(page.getByText("Day 1 of 14", { exact: true })).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Sprint Priorities" })
+    .click();
+  await expect(page.getByText("Day 1 of 14", { exact: true })).toBeVisible();
+  await expect(page.getByText("In progress", { exact: true })).toBeVisible();
+  await page.getByLabel("Select sprint").selectOption("sprint-old");
+  await expect(page.getByText("Ended", { exact: true })).toBeVisible();
+});
+
+test("future sprint is explicitly upcoming rather than presented as started", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.data.sprints[0].start_date = localDate(1);
+  state.data.sprints[0].end_date = localDate(14);
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByText("NEXT SPRINT · UPCOMING")).toBeVisible();
+  await expect(
+    page.getByText("Starts in 1 day", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("This sprint has not started yet."),
+  ).toBeVisible();
+});
