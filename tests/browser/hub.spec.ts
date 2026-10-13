@@ -184,6 +184,18 @@ test("signed-out and nonmember states never load team tables", async ({
   await expect(
     page.getByRole("button", { name: /Continue with Google/ }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "DEBUT", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", {
+      name: "The DEBUT team gathered outside Weill Hall",
+    }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "test-results/debut-signin.png",
+    fullPage: true,
+  });
   expect(signedOut.calls).toEqual([]);
   const pending = await setup(page, { allowed: false });
   await expect(
