@@ -785,14 +785,24 @@ function Hub({ session }: { session: Session }) {
           <span>
             Workspace <ChevronRight size={14} /> <strong>{section}</strong>
           </span>
-          <button
-            className="refresh"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            <RefreshCw size={15} className={loading ? "spin" : ""} />
-            {loading ? "Refreshing" : "Refresh"}
-          </button>
+          <div className="topbar-actions">
+            <button
+              className="refresh"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              <RefreshCw size={15} className={loading ? "spin" : ""} />
+              {loading ? "Refreshing" : "Refresh"}
+            </button>
+            <button
+              className="icon-button mobile-signout"
+              aria-label="Sign out"
+              title="Sign out"
+              onClick={() => void db!.auth.signOut()}
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
         </header>
         <div className="content">
           <div className="page-title">
@@ -1591,7 +1601,9 @@ function SelectFilter({
       value={value}
       onChange={(e) => set(e.target.value)}
     >
-      <option value="">All {label.toLowerCase()}s</option>
+      <option value="">
+        All {label === "Status" ? "statuses" : `${label.toLowerCase()}s`}
+      </option>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}

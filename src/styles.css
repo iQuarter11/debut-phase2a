@@ -1262,3 +1262,18 @@ dialog::backdrop {
     transition: none !important;
   }
 }
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-signout {
+  display: none;
+}
+@media (max-width: 800px) {
+  .mobile-signout {
+    display: inline-flex;
+    color: #767c75;
+  }
+}

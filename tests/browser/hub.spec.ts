@@ -37,7 +37,7 @@ async function setup(
     await page.addInitScript(
       (session) =>
         localStorage.setItem(
-          "sb-xxaboxkjvgghyrjsygen-auth-token",
+          "sb-test-project-auth-token",
           JSON.stringify(session),
         ),
       session,
@@ -129,49 +129,45 @@ async function setup(
   };
   let permitted = allowed;
   const calls: string[] = [];
-  await page.route(
-    "https://xxaboxkjvgghyrjsygen.supabase.co/**",
-    async (route) => {
-      const request = route.request(),
-        url = new URL(request.url()),
-        name = url.pathname.split("/").at(-1)!;
-      calls.push(name);
-      if (url.pathname.includes("/auth/"))
-        return route.fulfill({ status: 200, json: user });
-      if (name === "is_active_member")
-        return route.fulfill({ json: permitted });
-      if (!data[name])
-        return route.fulfill({
-          status: 404,
-          json: { message: "Unknown table" },
-        });
-      const id = url.searchParams.get("id")?.replace("eq.", "");
-      if (request.method() === "GET")
-        return route.fulfill({ json: permitted ? data[name] : [] });
-      if (!permitted)
-        return route.fulfill({
-          status: 403,
-          json: { message: "Access revoked" },
-        });
-      const body = request.postDataJSON();
-      let result;
-      if (request.method() === "POST") {
-        const values = Array.isArray(body) ? body : [body];
-        result = values.map((v: any) => ({ id: crypto.randomUUID(), ...v }));
-        data[name].push(...result);
-      } else if (request.method() === "PATCH") {
-        result = data[name].filter((v) => v.id === id);
-        result.forEach((v) => Object.assign(v, body));
-      } else {
-        result = data[name].filter((v) => v.id === id);
-        data[name] = data[name].filter((v) => v.id !== id);
-      }
+  await page.route("https://test-project.supabase.co/**", async (route) => {
+    const request = route.request(),
+      url = new URL(request.url()),
+      name = url.pathname.split("/").at(-1)!;
+    calls.push(name);
+    if (url.pathname.includes("/auth/"))
+      return route.fulfill({ status: 200, json: user });
+    if (name === "is_active_member") return route.fulfill({ json: permitted });
+    if (!data[name])
       return route.fulfill({
-        status: request.method() === "POST" ? 201 : 200,
-        json: result,
+        status: 404,
+        json: { message: "Unknown table" },
       });
-    },
-  );
+    const id = url.searchParams.get("id")?.replace("eq.", "");
+    if (request.method() === "GET")
+      return route.fulfill({ json: permitted ? data[name] : [] });
+    if (!permitted)
+      return route.fulfill({
+        status: 403,
+        json: { message: "Access revoked" },
+      });
+    const body = request.postDataJSON();
+    let result;
+    if (request.method() === "POST") {
+      const values = Array.isArray(body) ? body : [body];
+      result = values.map((v: any) => ({ id: crypto.randomUUID(), ...v }));
+      data[name].push(...result);
+    } else if (request.method() === "PATCH") {
+      result = data[name].filter((v) => v.id === id);
+      result.forEach((v) => Object.assign(v, body));
+    } else {
+      result = data[name].filter((v) => v.id === id);
+      data[name] = data[name].filter((v) => v.id !== id);
+    }
+    return route.fulfill({
+      status: request.method() === "POST" ? 201 : 200,
+      json: result,
+    });
+  });
   await page.goto("/");
   return {
     data,
@@ -276,6 +272,7 @@ test("resource and purchase workflows persist and calculate totals", async ({
     .getByLabel("Google Drive URL", { exact: false })
     .fill("https://docs.google.com/document/d/fixture");
   await d.getByRole("button", { name: "Save changes" }).click();
+  await expect(d).not.toBeVisible();
   await expect(
     page.getByRole("link", { name: "Open in Drive" }),
   ).toHaveAttribute("target", "_blank");
@@ -293,6 +290,7 @@ test("resource and purchase workflows persist and calculate totals", async ({
   await d.getByLabel("Estimated unit cost").fill("12.50");
   await d.getByLabel("Reason", { exact: false }).fill("Complete the fixture");
   await d.getByRole("button", { name: "Save changes" }).click();
+  await expect(d).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "$37.50" })).toBeVisible();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page
@@ -322,12 +320,14 @@ test("sprint creation, priorities, history, and admin editing", async ({
   );
   await d.getByLabel("Sprint goal").fill("Build next iteration");
   await d.getByRole("button", { name: "Save changes" }).click();
+  await expect(d).not.toBeVisible();
   expect(data.sprints).toHaveLength(3);
   await page.getByRole("button", { name: "Add priority" }).click();
   d = page.getByRole("dialog");
   await d.getByLabel("Priority", { exact: false }).fill("Validate fixture");
   await d.getByLabel("Definition of done").fill("All checks pass");
   await d.getByRole("button", { name: "Save changes" }).click();
+  await expect(d).not.toBeVisible();
   expect(data.priorities).toHaveLength(2);
   await page
     .getByRole("navigation")
@@ -345,6 +345,7 @@ test("sprint creation, priorities, history, and admin editing", async ({
   await d.getByLabel("Google account email").fill("new@example.invalid");
   await d.getByLabel("Active — allow this member access").check();
   await d.getByRole("button", { name: "Save changes" }).click();
+  await expect(d).not.toBeVisible();
   expect(data.team_members).toHaveLength(3);
   await expect(page.getByText("New Fixture Member")).toBeVisible();
 });
@@ -353,6 +354,9 @@ test("member admin state, revocation, keyboard dialog, and mobile layout", async
 }) => {
   const state = await setup(page, { admin: false });
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("button", { name: "Sign out", exact: true }),
+  ).toBeVisible();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "Team Admin" })

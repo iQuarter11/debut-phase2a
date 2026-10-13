@@ -97,7 +97,8 @@ In Team Admin, edit a seeded member or add a new one. Enter the **exact Google a
 ```sh
 npm run build           # Strict TypeScript check and production build
 npm test                # Execute all migrations and test actual Postgres RLS/constraints/triggers
-npm run test:browser    # Browser workflows, mocked API; requires Playwright Chromium
+npx playwright install chromium  # One-time browser installation
+npm run test:browser    # Browser workflows, isolated mocked API on port 5175
 ```
 
 Database tests use ephemeral PGlite Postgres, with Auth schema and roles modeled locally. They test actual SQL policies and functions; they do not connect to or change the remote Supabase project. Browser tests use synthetic fixtures scoped to tests, never shipped in the app. Run the manual checklist against the real configured Supabase project before rollout; local policy tests do not verify its dashboard configuration or Google OAuth.
