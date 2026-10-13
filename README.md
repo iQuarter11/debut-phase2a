@@ -83,7 +83,7 @@ In Team Admin, edit a seeded member or add a new one. Enter the **exact Google a
 
 ## Using the workspace
 
-- **Overview** automatically picks today's active sprint using local dates. Its summaries open the relevant work or priority record.
+- **Overview** automatically picks today's active sprint using New York team dates. Its summaries open the relevant work or priority record.
 - **Sprint Board** filters by sprint, subteam, assignee, and status. Open a card to edit its details, status, blocker, or sprint assignment. New items require all core fields; acceptance criteria and resource URLs are optional. Remove requires confirmation. Story points are 1, 2, 3, 5, 8, 13.
 - **Sprint Priorities** lets members create nonoverlapping two-week sprints. Start date automatically proposes end date +13 days. Edit the goal, retrospective, and numbered priority ranks (unique per sprint), each with an owner and definition of done.
 - Moving unfinished work to another sprint automatically records the source as carryover. Database snapshots preserve each sprint's outcome across multiple moves or deletion. Moving completed work preserves its completed points in the source sprint's history. Returning an item to a sprint makes it live there again.
@@ -123,3 +123,5 @@ This repository contains frontend and database source; applying migrations, chan
 - `vercel.json`: Vite deployment settings and security headers.
 
 The app intentionally uses last-save-wins editing without optimistic concurrency, and no audit trail for ordinary edits. Historic outcomes snapshot work when it leaves a sprint; a still-assigned work item reflects its current status. Plan future immutable sprint closure or edit conflict handling separately if the team needs them.
+
+Sprints become In progress automatically on their start date; there is no manual Start action. Upcoming, In progress, and Ended labels and inclusive day counts are displayed on the overview, board, and priorities pages. All team dates use America/New_York to keep members in different time zones consistent.

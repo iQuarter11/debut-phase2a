@@ -112,12 +112,40 @@ export const emptyData: Dataset = {
 };
 export const tables = Object.keys(emptyData) as (keyof Dataset)[];
 export function today() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 export function activeSprint(sprints: Sprint[]) {
   const date = today();
   return sprints.find((s) => s.start_date <= date && s.end_date >= date);
+}
+export function sprintTiming(sprint: Sprint, date = today()) {
+  const day = (value: string) => Date.parse(`${value}T00:00:00Z`) / 86400000;
+  if (date < sprint.start_date)
+    return {
+      label: "Upcoming",
+      detail: `Starts in ${day(sprint.start_date) - day(date)} day${day(sprint.start_date) - day(date) === 1 ? "" : "s"}`,
+      progress: 0,
+    };
+  if (date > sprint.end_date)
+    return {
+      label: "Ended",
+      detail: `Ended ${dateLabel(sprint.end_date)}`,
+      progress: 100,
+    };
+  const elapsed = day(date) - day(sprint.start_date) + 1;
+  const total = day(sprint.end_date) - day(sprint.start_date) + 1;
+  return {
+    label: "In progress",
+    detail: `Day ${elapsed} of ${total}`,
+    progress: (elapsed / total) * 100,
+  };
 }
 export function dateLabel(value?: string | null) {
   return value
