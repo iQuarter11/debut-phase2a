@@ -219,6 +219,11 @@ function Hub({ session }: { session: Session }) {
     [saving, setSaving] = useState(false);
   const generation = useRef(0);
   useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
     void load();
     return () => {
       generation.current++;
@@ -692,21 +697,29 @@ function Hub({ session }: { session: Session }) {
   }
   function SprintSelect() {
     return (
-      <select
-        aria-label="Select sprint"
-        value={selectedSprint}
-        onChange={(e) => setSelectedSprint(e.target.value)}
-      >
-        <option value="">All sprints</option>
-        {[...data.sprints]
-          .sort((a, b) => b.start_date.localeCompare(a.start_date))
-          .map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-              {` · ${sprintTiming(s).label}`}
-            </option>
-          ))}
-      </select>
+      <label className="filter-field sprint-filter">
+        <span>Sprint</span>
+        <select
+          aria-label="Select sprint"
+          title={
+            sprint
+              ? `${sprint.name} · ${sprintTiming(sprint).label}`
+              : "All sprints"
+          }
+          value={selectedSprint}
+          onChange={(e) => setSelectedSprint(e.target.value)}
+        >
+          <option value="">All sprints</option>
+          {[...data.sprints]
+            .sort((a, b) => b.start_date.localeCompare(a.start_date))
+            .map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {` · ${sprintTiming(s).label}`}
+              </option>
+            ))}
+        </select>
+      </label>
     );
   }
   if (loading && !allowed)
@@ -798,7 +811,8 @@ function Hub({ session }: { session: Session }) {
       <main>
         <header className="topbar">
           <span>
-            Workspace <ChevronRight size={14} /> <strong>{section}</strong>
+            <span className="breadcrumb-parent">Workspace</span>{" "}
+            <ChevronRight size={14} /> <strong>{section}</strong>
           </span>
           <div className="topbar-actions">
             <button
@@ -1086,7 +1100,9 @@ function Hub({ session }: { session: Session }) {
                 >
                   Clear filters
                 </button>
-                <span className="muted">{filtered.length} items</span>
+                <span className="muted">
+                  {filtered.length} {filtered.length === 1 ? "item" : "items"}
+                </span>
               </div>
               {sprint && (
                 <div className="sprint-context">
@@ -1660,20 +1676,27 @@ function SelectFilter({
   options: { value: string; label: string }[];
 }) {
   return (
-    <select
-      aria-label={label}
-      value={value}
-      onChange={(e) => set(e.target.value)}
-    >
-      <option value="">
-        All {label === "Status" ? "statuses" : `${label.toLowerCase()}s`}
-      </option>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
+    <label className="filter-field">
+      <span>{label}</span>
+      <select
+        aria-label={label}
+        title={
+          options.find((o) => o.value === value)?.label ||
+          `All ${label === "Status" ? "statuses" : `${label.toLowerCase()}s`}`
+        }
+        value={value}
+        onChange={(e) => set(e.target.value)}
+      >
+        <option value="">
+          All {label === "Status" ? "statuses" : `${label.toLowerCase()}s`}
         </option>
-      ))}
-    </select>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 function SearchBox({

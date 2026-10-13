@@ -467,3 +467,62 @@ test("future sprint is explicitly upcoming rather than presented as started", as
     page.getByText("This sprint has not started yet."),
   ).toBeVisible();
 });
+
+test("dropdown labels, long selections, and dialog fields fit desktop and narrow screens", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  const longName =
+    "Sprint 1 — Prototype assembly and computational integration verification";
+  state.data.sprints[0].name = longName;
+  state.data.subteams[0].name =
+    "Computational Integration and Experimental Modeling";
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Sprint Board" })
+    .click();
+  await expect(page.locator(".sprint-filter > span")).toHaveText("Sprint");
+  await expect(page.getByLabel("Select sprint")).toHaveAttribute(
+    "title",
+    `${longName} · In progress`,
+  );
+  await page.getByLabel("Subteam", { exact: true }).selectOption("team-1");
+  await expect(page.getByLabel("Subteam", { exact: true })).toHaveAttribute(
+    "title",
+    state.data.subteams[0].name,
+  );
+  await page.getByLabel("Select sprint").focus();
+  await expect(page.getByLabel("Select sprint")).toBeFocused();
+  expect(
+    await page
+      .getByLabel("Select sprint")
+      .evaluate((el) => getComputedStyle(el).outlineWidth),
+  ).toBe("2px");
+  await page.screenshot({
+    path: "test-results/debut-dropdown-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 320, height: 800 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "New work item" }).click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("Subteam", { exact: true })
+    .selectOption("team-1");
+  expect(
+    await page
+      .getByRole("dialog")
+      .evaluate((el) => el.scrollWidth <= el.clientWidth),
+  ).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await page.screenshot({
+    path: "test-results/debut-dropdown-mobile.png",
+    fullPage: true,
+  });
+});
