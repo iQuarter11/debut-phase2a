@@ -166,14 +166,22 @@ export default function App() {
           <div className="login-foot">DEBUT / INTERNAL TEAM WORKSPACE</div>
         </div>
         <div className="login-art">
-          <Leaf size={72} strokeWidth={1} />
-          <h2>
-            Small steps.
-            <br />
-            Meaningful progress.
-          </h2>
-          <p>Plan together. Build with purpose.</p>
-          <div className="art-grid" />
+          <img
+            className="team-photo"
+            src="/brand/debut-team.jpeg"
+            alt="The DEBUT team gathered outside Weill Hall"
+            width="2200"
+            height="1652"
+          />
+          <div className="team-photo-caption">
+            <div className="eyebrow light">ONE TEAM. A SHARED PURPOSE.</div>
+            <h2>
+              Small steps.
+              <br />
+              Meaningful progress.
+            </h2>
+            <p>Plan together. Build with purpose.</p>
+          </div>
         </div>
       </div>
     );
@@ -181,13 +189,11 @@ export default function App() {
 }
 function Brand() {
   return (
-    <div className="brand">
-      <span className="brand-icon">
-        <Leaf size={21} />
+    <div className="brand brand-supplied">
+      <span className="debut-logo-frame">
+        <img src="/brand/debut-logo.png" alt="DEBUT" width="750" height="750" />
       </span>
-      <span>
-        DEBUT<small>TEAM HUB</small>
-      </span>
+      <small>TEAM HUB</small>
     </div>
   );
 }
@@ -884,6 +890,15 @@ function Hub({ session }: { session: Session }) {
           )}
           {section === "Overview" && (
             <>
+              <div className="project-identity">
+                <span className="eyebrow">PROJECT WORKSPACE</span>
+                <img
+                  src="/brand/ivie-logo.png"
+                  alt="IVIE"
+                  width="2172"
+                  height="724"
+                />
+              </div>
               <section className="sprint-banner">
                 <div>
                   <span className="eyebrow light">

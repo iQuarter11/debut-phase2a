@@ -1277,3 +1277,92 @@ dialog::backdrop {
     color: #767c75;
   }
 }
+
+/* Original supplied assets are preserved; the logo frame removes visual whitespace. */
+.brand.brand-supplied {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.debut-logo-frame {
+  display: block;
+  width: 174px;
+  height: 82px;
+  overflow: hidden;
+}
+.debut-logo-frame img {
+  display: block;
+  width: 174px;
+  height: 174px;
+  max-width: none;
+  transform: translateY(-48px);
+}
+.brand.brand-supplied small {
+  padding-left: 4px;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+.login > .brand.brand-supplied {
+  margin-bottom: 42px;
+}
+.login-art {
+  padding: 0;
+  justify-content: center;
+}
+.team-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.team-photo-caption {
+  padding: 35px 40px;
+}
+.team-photo-caption h2 {
+  font-size: 32px;
+  margin-top: 16px;
+}
+.project-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid var(--line);
+  padding: 8px 0 14px;
+}
+.project-identity img {
+  width: 138px;
+  height: auto;
+}
+@media (max-width: 800px) {
+  .brand.brand-supplied {
+    flex-direction: row;
+    align-items: center;
+  }
+  .debut-logo-frame {
+    width: 140px;
+    height: 63px;
+  }
+  .debut-logo-frame img {
+    width: 140px;
+    height: 140px;
+    transform: translateY(-39px);
+  }
+  .gate:has(.team-photo) {
+    flex-direction: column;
+  }
+  .login-art {
+    display: block;
+    width: 100%;
+    min-height: 0;
+  }
+  .team-photo-caption {
+    padding: 28px 35px;
+  }
+  .team-photo-caption h2 {
+    font-size: 28px;
+  }
+  .project-identity img {
+    width: 110px;
+  }
+}
