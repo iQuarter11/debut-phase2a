@@ -125,3 +125,13 @@ This repository contains frontend and database source; applying migrations, chan
 The app intentionally uses last-save-wins editing without optimistic concurrency, and no audit trail for ordinary edits. Historic outcomes snapshot work when it leaves a sprint; a still-assigned work item reflects its current status. Plan future immutable sprint closure or edit conflict handling separately if the team needs them.
 
 Sprints become In progress automatically on their start date; there is no manual Start action. Upcoming, In progress, and Ended labels and inclusive day counts are displayed on the overview, board, and priorities pages. All team dates use America/New_York to keep members in different time zones consistent.
+
+## Upgrade an existing app to multiple assignees (preserves data)
+
+For a project already running migrations 001–003, run **only** `supabase/migrations/202610140001_multiple_assignees.sql` in the Supabase SQL Editor, once. Do not rerun the original migrations or reset the database. Apply this migration before merging/deploying the multiple-assignees frontend update.
+
+The migration adds assignment arrays, backfills each existing primary assignee as the first person, and preserves historical assignments. No records or original columns are dropped. An RLS-protected, trigger-maintained mirror uses foreign keys to keep assignment references valid. Older deployed app versions remain compatible: edits to the legacy primary assignee preserve secondary assignees. Members referenced by work or historical assignments should be deactivated rather than deleted.
+
+After deployment, open a work item and select one or more people under **Assignees**. Current assignees remain checked, including deactivated members so an unrelated edit never silently removes ownership. Cards and summaries list all assignees; filtering by any assigned member finds the item. Purchase requesters and priority/resource owners remain single-person fields.
+
+Verify after upgrading: open an existing assigned item and confirm its owner is checked; add a second person, save, refresh, and filter by each person. Check Sprint History retains prior ownership. The new frontend can read legacy rows if the migration is pending, but saving assignments requires the new migration and shows a setup error if it is missing.

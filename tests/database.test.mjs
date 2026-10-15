@@ -17,13 +17,20 @@ before(async () => {
  grant usage on schema public,auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
   for (const file of (
     await readdir(new URL("../supabase/migrations/", import.meta.url))
-  ).sort())
+  ).sort()) {
+    if (file.startsWith("20261014")) {
+      await pg.exec(`insert into public.sprints(id,name,start_date,end_date,goal) values('10000000-0000-0000-0000-000000000099','Existing sprint','2025-12-01','2025-12-14','Existing goal');
+      insert into public.work_items(id,title,description,points,status,assignee_id) select '20000000-0000-0000-0000-000000000099','Existing assigned work','Keep this description',8,'In Review',id from public.team_members where display_name='Anna';
+      insert into public.work_items(id,title,points) values('20000000-0000-0000-0000-000000000098','Existing unassigned work',2);
+      insert into public.work_item_history(work_item_id,sprint_id,title,points,status,assignee_id,outcome) select '20000000-0000-0000-0000-000000000097','10000000-0000-0000-0000-000000000099','Existing outcome',5,'Done',id,'Completed' from public.team_members where display_name='Anna';`);
+    }
     await pg.exec(
       await readFile(
         new URL("../supabase/migrations/" + file, import.meta.url),
         "utf8",
       ),
     );
+  }
   await pg.exec(`insert into auth.users values ('${admin}','admin@example.invalid',now()),('${member}','member@example.invalid',now()),('${outsider}','outsider@example.invalid',now());
  update public.team_members set email='admin@example.invalid',role='admin',active=true where display_name='Ian';
  update public.team_members set email='member@example.invalid',active=true where display_name='Anna';
@@ -51,6 +58,7 @@ const exposed = [
   "resources",
   "purchases",
   "work_item_history",
+  "work_item_assignees",
 ];
 test("migration enables RLS on every exposed table", async () => {
   const { rows } = await pg.query(
@@ -365,6 +373,146 @@ test("removing a sprint clears work assignments without violating snapshot refer
         )
       ).rows[0].sprint_id,
       null,
+    );
+  });
+});
+
+test("upgrade preserves existing work IDs, content, legacy assignments and history", async () => {
+  await as("authenticated", member, async () => {
+    const {
+      rows: [w],
+    } = await pg.query(
+      "select * from public.work_items where id='20000000-0000-0000-0000-000000000099'",
+    );
+    assert.equal(w.title, "Existing assigned work");
+    assert.equal(w.description, "Keep this description");
+    assert.equal(w.points, 8);
+    assert.equal(w.status, "In Review");
+    assert.deepEqual(w.assignee_ids, [w.assignee_id]);
+    const {
+      rows: [h],
+    } = await pg.query(
+      "select * from public.work_item_history where title='Existing outcome'",
+    );
+    assert.deepEqual(h.assignee_ids, [h.assignee_id]);
+    assert.equal(h.points, 5);
+    const {
+      rows: [u],
+    } = await pg.query(
+      "select * from public.work_items where title='Existing unassigned work'",
+    );
+    assert.deepEqual(u.assignee_ids, []);
+    assert.equal(u.assignee_id, null);
+    assert.equal(
+      (
+        await pg.query(
+          "select * from public.work_item_assignees where work_item_id=$1",
+          [w.id],
+        )
+      ).rows.length,
+      1,
+    );
+  });
+});
+test("multiple assignments save atomically and snapshots retain all owners", async () => {
+  await as("authenticated", member, async () => {
+    const { rows: owners } = await pg.query(
+      "select id from public.team_members where email in ('admin@example.invalid','member@example.invalid') order by email",
+    );
+    const ids = owners.map((m) => m.id);
+    const {
+      rows: [w],
+    } = await pg.query(
+      "insert into public.work_items(title,points,sprint_id,assignee_ids) values($1,3,$2,$3::uuid[]) returning *",
+      ["Joint work", sprint1, [...ids, ids[0]]],
+    );
+    assert.deepEqual(w.assignee_ids, ids);
+    assert.equal(w.assignee_id, ids[0]);
+    assert.equal(
+      (
+        await pg.query(
+          "select * from public.work_item_assignees where work_item_id=$1",
+          [w.id],
+        )
+      ).rows.length,
+      2,
+    );
+    await pg.query("update public.work_items set sprint_id=$1 where id=$2", [
+      sprint2,
+      w.id,
+    ]);
+    const {
+      rows: [h],
+    } = await pg.query(
+      "select * from public.work_item_history where work_item_id=$1",
+      [w.id],
+    );
+    assert.deepEqual(h.assignee_ids, ids);
+    await pg.query(
+      "update public.work_items set assignee_ids=$1::uuid[] where id=$2",
+      [[ids[1]], w.id],
+    );
+    assert.equal(
+      (
+        await pg.query(
+          "select * from public.work_item_assignees where work_item_id=$1",
+          [w.id],
+        )
+      ).rows.length,
+      1,
+    );
+  });
+});
+test("legacy single-assignee clients preserve secondary owners", async () => {
+  await as("authenticated", member, async () => {
+    const { rows: owners } = await pg.query(
+      "select id from public.team_members order by display_name limit 3",
+    );
+    const ids = owners.map((m) => m.id);
+    const {
+      rows: [w],
+    } = await pg.query(
+      "insert into public.work_items(title,points,assignee_ids) values('Legacy compatibility',3,$1::uuid[]) returning *",
+      [[ids[0], ids[1]]],
+    );
+    await pg.query("update public.work_items set assignee_id=$1 where id=$2", [
+      ids[2],
+      w.id,
+    ]);
+    assert.deepEqual(
+      (
+        await pg.query(
+          "select assignee_ids from public.work_items where id=$1",
+          [w.id],
+        )
+      ).rows[0].assignee_ids,
+      [ids[2], ids[1]],
+    );
+  });
+});
+test("invalid assignment references and forged mirror writes are rejected", async () => {
+  await as("authenticated", member, () =>
+    assert.rejects(
+      pg.query(
+        "insert into public.work_items(title,points,assignee_ids) values('Invalid assignment',2,array['99999999-0000-0000-0000-000000000000']::uuid[])",
+      ),
+      /Every assignee/,
+    ),
+  );
+  await as("authenticated", member, () =>
+    assert.rejects(
+      pg.query("delete from public.work_item_assignees"),
+      /permission denied/,
+    ),
+  );
+  await as("authenticated", outsider, async () => {
+    assert.equal(
+      (
+        await pg.query(
+          "update public.work_items set assignee_ids='{}' returning id",
+        )
+      ).rows.length,
+      0,
     );
   });
 });

@@ -34,6 +34,7 @@ import {
   emptyData,
   tables,
   activeSprint,
+  workAssignees,
   sprintTiming,
   dateLabel,
   safeURL,
@@ -311,6 +312,10 @@ function Hub({ session }: { session: Session }) {
     sprint = data.sprints.find((s) => s.id === selectedSprint);
   const memberName = (id: unknown) =>
     data.team_members.find((m) => m.id === id)?.display_name || "Unassigned";
+  const assigneeNames = (item: {
+    assignee_id?: unknown;
+    assignee_ids?: unknown;
+  }) => workAssignees(item).map(memberName).join(", ") || "Unassigned";
   const teamName = (id: unknown) =>
     data.subteams.find((t) => t.id === id)?.name || "No subteam";
   const sprintName = (id: unknown) =>
@@ -329,7 +334,7 @@ function Hub({ session }: { session: Session }) {
     (w) =>
       (!selectedSprint || w.sprint_id === selectedSprint) &&
       (!subteam || w.subteam_id === subteam) &&
-      (!assignee || w.assignee_id === assignee) &&
+      (!assignee || workAssignees(w).includes(assignee)) &&
       (!status || w.status === status),
   );
   async function save(table: Table, payload: Row, id?: string) {
@@ -340,7 +345,13 @@ function Hub({ session }: { session: Session }) {
         ? db!.from(table).update(payload).eq("id", id)
         : db!.from(table).insert(payload);
       const result = await query.select("id");
-      if (result.error) throw result.error;
+      if (result.error) {
+        if (result.error.message.includes("assignee_ids"))
+          throw new Error(
+            "Run the new multiple-assignees SQL migration in Supabase before saving assignments. Your existing data is preserved.",
+          );
+        throw result.error;
+      }
       if (!result.data?.length)
         throw new Error(
           "No changes saved. Your access may have changed; refresh the workspace.",
@@ -431,7 +442,22 @@ function Hub({ session }: { session: Session }) {
             required: true,
             options: teams,
           },
-          owner("assignee_id", "Assignee"),
+          {
+            key: "assignee_ids",
+            label: "Assignees",
+            type: "multiselect",
+            required: true,
+            options: [
+              ...members,
+              ...workAssignees(row)
+                .filter((id) => !members.some((m) => m.value === id))
+                .map((id) => ({
+                  value: id,
+                  label: memberName(id) + " (inactive)",
+                })),
+            ],
+            hint: "Choose one or more people. Existing assignments remain selected.",
+          },
           {
             key: "sprint_id",
             label: "Sprint",
@@ -629,7 +655,17 @@ function Hub({ session }: { session: Session }) {
       team_members: { role: "member", active: false },
       subteams: {},
     };
-    return { ...defaults[table], ...row };
+    return {
+      ...defaults[table],
+      ...row,
+      ...(table === "work_items"
+        ? {
+            assignee_ids: row.id
+              ? workAssignees(row)
+              : [me?.id].filter(Boolean),
+          }
+        : {}),
+    };
   }
   function Card({ w }: { w: Work }) {
     return (
@@ -652,9 +688,9 @@ function Hub({ session }: { session: Session }) {
         <div className="card-footer">
           <span>
             <span className="avatar small">
-              {memberName(w.assignee_id).slice(0, 1)}
+              {memberName(workAssignees(w)[0]).slice(0, 1)}
             </span>
-            {memberName(w.assignee_id)}
+            {assigneeNames(w)}
           </span>
           <time
             className={
@@ -683,7 +719,7 @@ function Hub({ session }: { session: Session }) {
             <span>
               <strong>{w.title}</strong>
               <small>
-                {memberName(w.assignee_id)} · {dateLabel(w.due_date)}
+                {assigneeNames(w)} · {dateLabel(w.due_date)}
               </small>
             </span>
             <Badge value={w.status} />
@@ -1424,7 +1460,7 @@ function Hub({ session }: { session: Session }) {
                               <span>
                                 <strong>{h.title}</strong>
                                 <small>
-                                  {memberName(h.assignee_id)} · Archived outcome
+                                  {assigneeNames(h)} · Archived outcome
                                 </small>
                               </span>
                               <span className="tag">{h.points} pt</span>
@@ -1439,7 +1475,7 @@ function Hub({ session }: { session: Session }) {
                                 <span>
                                   <strong>{h.title}</strong>
                                   <small>
-                                    {memberName(h.assignee_id)} · Moved to{" "}
+                                    {assigneeNames(h)} · Moved to{" "}
                                     {sprintName(h.next_sprint_id)}
                                   </small>
                                 </span>
@@ -1820,7 +1856,8 @@ function Editor({
     const payload: Row = {};
     for (const f of fields) {
       let value = values[f.key];
-      if (f.type === "checkbox") value = Boolean(value);
+      if (f.type === "multiselect") value = Array.isArray(value) ? value : [];
+      else if (f.type === "checkbox") value = Boolean(value);
       else if (f.key === "tags")
         value = Array.isArray(value)
           ? value
@@ -1846,6 +1883,16 @@ function Editor({
           ? null
           : "";
       payload[f.key] = value;
+    }
+    if (table === "work_items") {
+      if (
+        !Array.isArray(payload.assignee_ids) ||
+        payload.assignee_ids.length === 0
+      ) {
+        setValidation("Choose at least one assignee.");
+        return;
+      }
+      payload.assignee_id = payload.assignee_ids[0];
     }
     if (table === "work_items" && payload.blocked && !payload.blocker_reason) {
       setValidation("Describe the blocker so the team can help.");
@@ -1884,84 +1931,133 @@ function Editor({
     >
       <form onSubmit={submit}>
         <div className="form-fields">
-          {fields.map((f) => (
-            <label
-              className={`field ${f.type === "textarea" ? "wide" : ""} ${f.type === "checkbox" ? "checkbox" : ""}`}
-              key={f.key}
-            >
-              <span>
-                {f.label}
-                {f.required && (
+          {fields.map((f) =>
+            f.type === "multiselect" ? (
+              <fieldset className="assignee-picker wide" key={f.key}>
+                <legend>
+                  {f.label}{" "}
                   <span className="required" aria-hidden="true">
-                    {" "}
                     *
                   </span>
-                )}
-              </span>
-              {f.type === "textarea" ? (
-                <textarea
-                  aria-label={f.label}
-                  aria-describedby={
-                    f.hint ? `${table}-${f.key}-hint` : undefined
-                  }
-                  value={String(values[f.key] || "")}
-                  onChange={(e) => change(f.key, e.target.value)}
-                  required={f.required}
-                  rows={3}
-                />
-              ) : f.type === "select" ? (
-                <select
-                  aria-label={f.label}
-                  aria-describedby={
-                    f.hint ? `${table}-${f.key}-hint` : undefined
-                  }
-                  value={String(values[f.key] ?? "")}
-                  onChange={(e) => change(f.key, e.target.value)}
-                  required={f.required}
-                >
-                  <option value="">Select…</option>
+                </legend>
+                <div className="assignee-options">
                   {f.options?.map((o) => (
-                    <option value={o.value} key={o.value}>
-                      {o.label}
-                    </option>
+                    <label key={o.value} className="assignee-option">
+                      <input
+                        type="checkbox"
+                        checked={
+                          Array.isArray(values[f.key]) &&
+                          (values[f.key] as string[]).includes(o.value)
+                        }
+                        onChange={(e) => {
+                          const ids = Array.isArray(values[f.key])
+                            ? (values[f.key] as string[])
+                            : [];
+                          change(
+                            f.key,
+                            e.target.checked
+                              ? [...ids, o.value]
+                              : ids.filter((id) => id !== o.value),
+                          );
+                        }}
+                      />
+                      <span>{o.label}</span>
+                    </label>
                   ))}
-                </select>
-              ) : f.type === "checkbox" ? (
-                <input
-                  aria-label={f.label}
-                  type="checkbox"
-                  checked={Boolean(values[f.key])}
-                  onChange={(e) => change(f.key, e.target.checked)}
-                />
-              ) : (
-                <input
-                  aria-label={f.label}
-                  aria-describedby={
-                    f.hint ? `${table}-${f.key}-hint` : undefined
-                  }
-                  type={f.type === "money" ? "number" : f.type || "text"}
-                  value={
-                    Array.isArray(values[f.key])
-                      ? (values[f.key] as string[]).join(", ")
-                      : String(values[f.key] ?? "")
-                  }
-                  onChange={(e) => change(f.key, e.target.value)}
-                  required={f.required}
-                  min={
-                    f.type === "money" ? 0 : f.type === "number" ? 1 : undefined
-                  }
-                  step={
-                    f.type === "money"
-                      ? "0.01"
-                      : f.type === "number"
-                        ? 1
-                        : undefined
-                  }
-                />
-              )}{" "}
-              {f.hint && <small id={`${table}-${f.key}-hint`}>{f.hint}</small>}
-            </label>
-          ))}
+                </div>
+                {f.hint && <small>{f.hint}</small>}
+                {!f.options?.length && (
+                  <p className="muted">
+                    Ask an admin to activate a team member before assigning
+                    work.
+                  </p>
+                )}
+              </fieldset>
+            ) : (
+              <label
+                className={`field ${f.type === "textarea" ? "wide" : ""} ${f.type === "checkbox" ? "checkbox" : ""}`}
+                key={f.key}
+              >
+                <span>
+                  {f.label}
+                  {f.required && (
+                    <span className="required" aria-hidden="true">
+                      {" "}
+                      *
+                    </span>
+                  )}
+                </span>
+                {f.type === "textarea" ? (
+                  <textarea
+                    aria-label={f.label}
+                    aria-describedby={
+                      f.hint ? `${table}-${f.key}-hint` : undefined
+                    }
+                    value={String(values[f.key] || "")}
+                    onChange={(e) => change(f.key, e.target.value)}
+                    required={f.required}
+                    rows={3}
+                  />
+                ) : f.type === "select" ? (
+                  <select
+                    aria-label={f.label}
+                    aria-describedby={
+                      f.hint ? `${table}-${f.key}-hint` : undefined
+                    }
+                    value={String(values[f.key] ?? "")}
+                    onChange={(e) => change(f.key, e.target.value)}
+                    required={f.required}
+                  >
+                    <option value="">Select…</option>
+                    {f.options?.map((o) => (
+                      <option value={o.value} key={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : f.type === "checkbox" ? (
+                  <input
+                    aria-label={f.label}
+                    type="checkbox"
+                    checked={Boolean(values[f.key])}
+                    onChange={(e) => change(f.key, e.target.checked)}
+                  />
+                ) : (
+                  <input
+                    aria-label={f.label}
+                    aria-describedby={
+                      f.hint ? `${table}-${f.key}-hint` : undefined
+                    }
+                    type={f.type === "money" ? "number" : f.type || "text"}
+                    value={
+                      Array.isArray(values[f.key])
+                        ? (values[f.key] as string[]).join(", ")
+                        : String(values[f.key] ?? "")
+                    }
+                    onChange={(e) => change(f.key, e.target.value)}
+                    required={f.required}
+                    min={
+                      f.type === "money"
+                        ? 0
+                        : f.type === "number"
+                          ? 1
+                          : undefined
+                    }
+                    step={
+                      f.type === "money"
+                        ? "0.01"
+                        : f.type === "number"
+                          ? 1
+                          : undefined
+                    }
+                  />
+                )}{" "}
+                {f.hint && (
+                  <small id={`${table}-${f.key}-hint`}>{f.hint}</small>
+                )}
+              </label>
+            ),
+          )}
         </div>
         {(validation || error) && (
           <p className="error" role="alert">

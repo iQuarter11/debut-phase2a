@@ -526,3 +526,67 @@ test("dropdown labels, long selections, and dialog fields fit desktop and narrow
     fullPage: true,
   });
 });
+
+test("existing assignee is preserved while adding, filtering, and removing additional assignees", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Sprint Board" })
+    .click();
+  await page.getByRole("button", { name: /Review prototype/ }).click();
+  let group = page.getByRole("group", { name: "Assignees" });
+  await expect(
+    group.getByLabel("Fixture Contributor", { exact: true }),
+  ).toBeChecked();
+  await group.getByLabel("Fixture Colleague", { exact: true }).check();
+  await page.screenshot({
+    path: "test-results/debut-multiple-assignees.png",
+    fullPage: true,
+  });
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save changes" })
+    .click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(state.data.work_items[0].assignee_ids).toEqual([
+    "member-1",
+    "member-2",
+  ]);
+  expect(state.data.work_items[0].assignee_id).toBe("member-1");
+  await expect(
+    page.getByRole("button", { name: /Review prototype/ }),
+  ).toContainText("Fixture Contributor, Fixture Colleague");
+  await page.getByLabel("Assignee", { exact: true }).selectOption("member-2");
+  await expect(
+    page.getByRole("button", { name: /Review prototype/ }),
+  ).toBeVisible();
+  state.data.team_members[1].active = false;
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /Review prototype/ }).click();
+  group = page.getByRole("group", { name: "Assignees" });
+  await expect(
+    group.getByLabel("Fixture Colleague (inactive)", { exact: true }),
+  ).toBeChecked();
+  await group.getByLabel("Fixture Contributor", { exact: true }).uncheck();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save changes" })
+    .click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(state.data.work_items[0].assignee_ids).toEqual(["member-2"]);
+  await page.getByRole("button", { name: /Review prototype/ }).click();
+  await page
+    .getByRole("group", { name: "Assignees" })
+    .getByLabel("Fixture Colleague (inactive)", { exact: true })
+    .uncheck();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save changes" })
+    .click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toHaveText(
+    "Choose at least one assignee.",
+  );
+  expect(state.data.work_items[0].assignee_ids).toEqual(["member-2"]);
+});
