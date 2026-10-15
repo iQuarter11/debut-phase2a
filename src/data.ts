@@ -41,6 +41,7 @@ export type Work = {
   points: number;
   subteam_id: string | null;
   assignee_id: string | null;
+  assignee_ids?: string[];
   sprint_id: string | null;
   due_date: string | null;
   status: (typeof statuses)[number];
@@ -86,6 +87,7 @@ export type WorkHistory = {
   points: number;
   status: string;
   assignee_id: string | null;
+  assignee_ids?: string[];
   outcome: string;
   next_sprint_id: string | null;
   recorded_at: string;
@@ -164,4 +166,17 @@ export function safeURL(value: string | null) {
   } catch {
     return null;
   }
+}
+
+export function workAssignees(item: {
+  assignee_id?: unknown;
+  assignee_ids?: unknown;
+}): string[] {
+  if (Array.isArray(item.assignee_ids))
+    return [
+      ...new Set(
+        item.assignee_ids.filter((id): id is string => typeof id === "string"),
+      ),
+    ];
+  return typeof item.assignee_id === "string" ? [item.assignee_id] : [];
 }
